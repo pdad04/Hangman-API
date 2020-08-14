@@ -4,68 +4,94 @@ const Words = require('../models/wordsModel');
 
 const wordsController = {
   async allWords(req, res) {
-    // const wordKeys = ["art", "animals","beach","christmas","clothes","cooking","fruit","furniture","jobs","plants","reptiles","science","shapes","transportation"]
-    
-    // // Get a random key to return
-    // const randomKey = Math.floor(Math.random() * ((wordKeys.length - 1) - 0 + 1)) + 0;
-    // const randomWordKey = wordKeys[randomKey];
 
-    // const words = await Words.find({ "words": { $exists: true }});
-
-    // const selectedKey = words[0].words[randomWordKey];
-    // const randomWordIndex = Math.floor(Math.random() * (selectedKey.length - 1) - 0 + 1) + 0;
-
-    // const selectedCategoryAndWord = {
-    //   category: randomWordKey,
-    //   word: selectedKey[randomWordIndex]
-    // }
-
-    // res.json(selectedCategoryAndWord);
-
-    const randomWord = await Words.aggregate([
-      {
-        $project: {
-          words: {
-            $reduce: {
-              input: {
-                $objectToArray: "$words"
-              },
-              initialValue: [],
-              in: {
-                $concatArrays: [
-                  "$$value",
-                  {
-                    $map: {
-                      input: "$$this.v",
-                      as: "w",
-                      in: {
-                        key: "$$this.k",
-                        word: "$$w"
+    try {
+      const randomWord = await Words.aggregate([
+        {
+          $project: {
+            words: {
+              $reduce: {
+                input: {
+                  $objectToArray: "$words"
+                },
+                initialValue: [],
+                in: {
+                  $concatArrays: [
+                    "$$value",
+                    {
+                      $map: {
+                        input: "$$this.v",
+                        as: "w",
+                        in: {
+                          categoryKey: "$$this.k",
+                          word: "$$w"
+                        }
                       }
                     }
-                  }
-                ]
+                  ]
+                }
               }
             }
           }
+        },
+        {
+          $unwind: "$words"
+        },
+        {
+          $replaceWith: "$words" // For MongoDB v3.4 $replaceRoot:{newRoot:"$words"}
+        },
+        {
+          $sample: {
+            size: 1
+          }
         }
-      },
-      {
-        $unwind: "$words"
-      },
-      {
-        $replaceWith: "$words" // For MongoDB v3.4 $replaceRoot:{newRoot:"$words"}
-      },
-      {
-        $sample: {
-          size: 1
-        }
-      }
-    ]);
-
-    res.json(randomWord[0]);
+      ]);
+  
+      res.json(randomWord[0]);
+    } catch (error) {
+      res.status(500)
+      res.json({message: "A server error occurred. Try again later"})
+    }
   },
 
+
+  async categoryWord(req, res) {
+    const wordKeys = ["art", "animals","beach","christmas","clothes","cooking","fruit","furniture","jobs","plants","reptiles","science","shapes","transportation"]
+    const queryParam =  req.query.category.toLowerCase();
+    
+    if(!wordKeys.includes(queryParam)) {
+      res.status(400);
+      res.json({message: `Invalid category supplied. '${queryParam}' category does not exist`})
+      return;
+    }
+    
+    
+    // Construct an object to use in the mongo aggregation query
+    const projectionQuery = {};
+    projectionQuery[`words.${queryParam}`] = 1;
+
+    try {
+      const categoryWord = await Words.aggregate([
+        {
+          '$project': projectionQuery
+        }, {
+          '$unwind': {
+            'path': '$words.' + queryParam, 
+          }
+        }, {
+          '$sample': {
+            'size': 1
+          }
+        }
+      ]);
+
+      res.json(categoryWord[0].words);
+
+    } catch (error) {
+      res.status(500);
+      res.send(error);
+    }
+  }
 }
 
 module.exports = wordsController;

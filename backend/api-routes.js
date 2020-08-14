@@ -10,11 +10,8 @@ router.get('/', function(req, res) {
   });
 });
 
-// router.get('/words', async (req, res) => {
-//   const words = await Words.find({"words": {$exists: true}});
-//   res.json(words[0]);
-// })
 
 router.get('/words', wordsController.allWords);
+router.get('/words/categories',wordsController.categoryWord);
 
 module.exports = router;
